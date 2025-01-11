@@ -11,9 +11,7 @@ class RecordSequencerClass: ObservableObject {
     let notes = [36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51]
     init() {
         engine.output = instrument
-//        try? instrument.loadInstrument(url:
-//        Bundle.main.url(forResource: "Sounds/GuitarTaps", withExtension: "exs")!)
-        if let url = Bundle.main.url(forResource: "Sounds/GuitarTaps", withExtension: "exs") {
+        if let url = Bundle.main.url(forResource: "GuitarTaps", withExtension: "exs") {
             try? instrument.loadInstrument(url: url)
         } else {
             print("Error: Could not find the instrument file 'GuitarTaps.exs'")

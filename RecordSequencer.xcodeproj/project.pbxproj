@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		6E4E72E92D3305DE001B6E3D /* AudioKit in Frameworks */ = {isa = PBXBuildFile; productRef = 6E4E72E82D3305DE001B6E3D /* AudioKit */; };
+		6EA033542D332D7100D6AED5 /* GuitarTaps.exs in Resources */ = {isa = PBXBuildFile; fileRef = 6EA033522D332D7100D6AED5 /* GuitarTaps.exs */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		6E4E72B42D32FAF5001B6E3D /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,11 +32,25 @@
 		6E4E72A32D32FAF3001B6E3D /* RecordSequencer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RecordSequencer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6E4E72B32D32FAF5001B6E3D /* RecordSequencerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RecordSequencerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6E4E72BD2D32FAF5001B6E3D /* RecordSequencerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RecordSequencerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		6EA033522D332D7100D6AED5 /* GuitarTaps.exs */ = {isa = PBXFileReference; lastKnownFileType = file; path = GuitarTaps.exs; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		6E4E72EB2D33082B001B6E3D /* Exceptions for "RecordSequencer" folder in "RecordSequencer" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 6E4E72A22D32FAF3001B6E3D /* RecordSequencer */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		6E4E72A52D32FAF3001B6E3D /* RecordSequencer */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				6E4E72EB2D33082B001B6E3D /* Exceptions for "RecordSequencer" folder in "RecordSequencer" target */,
+			);
 			path = RecordSequencer;
 			sourceTree = "<group>";
 		};
@@ -52,6 +71,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6E4E72E92D3305DE001B6E3D /* AudioKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -75,9 +95,11 @@
 		6E4E729A2D32FAF3001B6E3D = {
 			isa = PBXGroup;
 			children = (
+				6EA033532D332D7100D6AED5 /* Sounds */,
 				6E4E72A52D32FAF3001B6E3D /* RecordSequencer */,
 				6E4E72B62D32FAF5001B6E3D /* RecordSequencerTests */,
 				6E4E72C02D32FAF5001B6E3D /* RecordSequencerUITests */,
+				6E4E72E72D3305DE001B6E3D /* Frameworks */,
 				6E4E72A42D32FAF3001B6E3D /* Products */,
 			);
 			sourceTree = "<group>";
@@ -90,6 +112,21 @@
 				6E4E72BD2D32FAF5001B6E3D /* RecordSequencerUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		6E4E72E72D3305DE001B6E3D /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		6EA033532D332D7100D6AED5 /* Sounds */ = {
+			isa = PBXGroup;
+			children = (
+				6EA033522D332D7100D6AED5 /* GuitarTaps.exs */,
+			);
+			path = Sounds;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -112,6 +149,7 @@
 			);
 			name = RecordSequencer;
 			packageProductDependencies = (
+				6E4E72E82D3305DE001B6E3D /* AudioKit */,
 			);
 			productName = RecordSequencer;
 			productReference = 6E4E72A32D32FAF3001B6E3D /* RecordSequencer.app */;
@@ -195,6 +233,9 @@
 			);
 			mainGroup = 6E4E729A2D32FAF3001B6E3D;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				6E4E72E62D3305D8001B6E3D /* XCRemoteSwiftPackageReference "AudioKit" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 6E4E72A42D32FAF3001B6E3D /* Products */;
 			projectDirPath = "";
@@ -212,6 +253,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6EA033542D332D7100D6AED5 /* GuitarTaps.exs in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -399,6 +441,7 @@
 				DEVELOPMENT_TEAM = R649RX774M;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = RecordSequencer/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -428,6 +471,7 @@
 				DEVELOPMENT_TEAM = R649RX774M;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = RecordSequencer/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -558,6 +602,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		6E4E72E62D3305D8001B6E3D /* XCRemoteSwiftPackageReference "AudioKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/AudioKit/AudioKit";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.6.4;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		6E4E72E82D3305DE001B6E3D /* AudioKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6E4E72E62D3305D8001B6E3D /* XCRemoteSwiftPackageReference "AudioKit" */;
+			productName = AudioKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 6E4E729B2D32FAF3001B6E3D /* Project object */;
 }
