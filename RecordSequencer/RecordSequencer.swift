@@ -1,5 +1,6 @@
 import SwiftUI
 import AudioKit
+import AVFoundation
 
 class RecordSequencerClass: ObservableObject {
     
@@ -7,11 +8,16 @@ class RecordSequencerClass: ObservableObject {
     var instrument = AppleSampler()
     var sequencer = AppleSequencer()
     var midiCallback = MIDICallbackInstrument()
+    var recordingSession: AVAudioSession!
+    var recorder: AVAudioRecorder!
+    var recordedFileURL: URL!
+    var numberOfRecords: Int = 0
+    @Published var isRecording = false
     @Published var playing : [Bool] = Array(repeating: false, count: 16)
     @Published var rowIsActive: Int = -1
     @Published var tempo: Double = 120
     @Published var numberOfRows: Int = 1
-    let notes = [100,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51]
+    let notes = [60,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51]
     init() {
         midiCallback.callback = { status, note, velocity in
             if status == 144 {
@@ -27,14 +33,10 @@ class RecordSequencerClass: ObservableObject {
             }
         }
         engine.output = instrument
-        if let url = Bundle.main.url(forResource: "GuitarTaps", withExtension: "exs") {
-            try? instrument.loadInstrument(url: url)
-        } else {
-            print("Error: Could not find the instrument file 'GuitarTaps.exs'")
-        }
         try? engine.start()
         
         setUpSequencer()
+        setUpRecorder()
         
     }
     func setUpSequencer() {
@@ -46,6 +48,20 @@ class RecordSequencerClass: ObservableObject {
         sequencer.setGlobalMIDIOutput(midiCallback.midiIn)
         sequencer.enableLooping()
         sequencer.preroll()
+    }
+    func setUpRecorder() {
+        recordingSession = AVAudioSession.sharedInstance()
+        
+        if let storedNumberOfRecords: Int = UserDefaults.standard.object(forKey: "numberOfRecords") as? Int{
+            numberOfRecords = storedNumberOfRecords
+        }
+        
+        AVAudioApplication.requestRecordPermission {
+            hasPermission in
+            if hasPermission {
+                print("Accepted")
+            }
+        }
         
     }
     func setTempo(_ tempo: Double) {
@@ -55,40 +71,81 @@ class RecordSequencerClass: ObservableObject {
     func addSixteenth(number: Double, note: Int, duration: Double) {
         sequencer.tracks.first?.add(noteNumber: MIDINoteNumber(note), velocity: 127, position: Duration(beats: 0.25 * number),
                                     duration: Duration(beats: duration))
+        
+//        print(playing)
+//        print("addSixteenth")
     }
     func removeSixteenth(number: Double) {
         sequencer.clearRange(start: Duration(beats: 0.25 * number), duration: Duration(beats: 0.25))
+//        print(playing)
+//        print("removeSixteenth")
     }
     func addRow() {
         numberOfRows += 1
         playing += Array(repeating: false, count: 16)
+//        print(playing.count)
+//        print("addRow")
     }
     func removeRow() {
-//        guard numberOfRows > 1 else { return } // Ensure there's at least one row to remove
-//        
-//        // Remove notes for the row being deleted
-//        for col in 0..<16 {
-//            removeSixteenth(number: Double(col))
-//            
-//            for row in 0..<numberOfRows-1 {
-//                let index = col + (row * 16)
-//                
-//                // Ensure the index is within bounds of the `playing` array
-//                if index >= 0 && index < playing.count && playing[index] {
-//                    addSixteenth(number: Double(col), note: notes[(row + (numberOfRows - 1)) % notes.count], duration: 0.25)
-//                }
-//            }
-//        }
-//        
-//        numberOfRows -= 1
-//        playing.removeLast(16)
+        guard numberOfRows > 1 else { return } // Ensure there's at least one row to remove
+        
+        for col in 0..<16 {
+            removeSixteenth(number: Double(col))
+        }
+        
+        numberOfRows -= 1
+        
+        for row in 0..<numberOfRows {
+            for col in 0..<16 {
+                if playing[col + row * 16] {
+                    addSixteenth(number: Double(col % 16), note: notes[Int(col/16) + row], duration: 0.25)
+                }
+            }
+        }
+    }
+    func getDirectory() -> URL {
+        let documentURLS = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        let documentDirectory = documentURLS[0]
+        return documentDirectory
+    }
+    func startRecording() {
+        let fileName = getDirectory().appendingPathComponent("\(numberOfRecords).m4a")
+        let settings = [
+            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
+            AVSampleRateKey: 41000,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
+        ]
+        do {
+            recorder = try AVAudioRecorder(url: fileName, settings: settings)
+            recorder?.record()
+        }
+        catch {
+            print("Recording did not work sir")
+        }
+    }
+    func stopRecording() {
+        recorder?.stop()
+        isRecording = false
+        recorder = nil
+        
+        UserDefaults.standard.set(numberOfRecords, forKey: "numberOfRecords")
+    }
+    func loadRecordedAudio(url: URL) {
+        do {
+            try instrument.loadAudioFile(AVAudioFile(forReading: url))
+        }
+        catch {
+            print("Failed to load recorded audio: \(error.localizedDescription)")
+        }
     }
     
 }
 
 struct RecordSequencerPadView: Identifiable, View {
     @EnvironmentObject var conductor: RecordSequencerClass
-    @GestureState private var isPressed = false
+    @GestureState var isPressed = false
+//    @GestureState var dragOffset: CGFloat = 0
     var id: Int
     @State var isActive = false
     var body: some View {
@@ -96,13 +153,22 @@ struct RecordSequencerPadView: Identifiable, View {
             .fill(conductor.playing[id] ? Color.blue: Color.blue.opacity(0.5))
             .aspectRatio(contentMode: .fit)
             .shadow(color: Color.red, radius: isActive ? 5 : 0, x: 0, y: 0)
-            .gesture(DragGesture(minimumDistance: 0)
-                .updating($isPressed) { (value, gestureState, transaction) in
-                    gestureState = true
+//            .simultaneousGesture(DragGesture(minimumDistance: 10)
+//                .updating($dragOffset) {
+//                    (value, gestureState, transaction) in
+//                    gestureState = value.translation.height
+//                })
+            .simultaneousGesture(DragGesture(minimumDistance: 0)
+                .updating($isPressed) {
+                    (value, gestureState, transaction) in
+
+//                    if dragOffset == .zero {
+                        gestureState = true
+//                    }
                 })
             .onChange(of: isPressed, perform: {
                     pressed in
-                    if pressed {
+                if pressed {
                         conductor.playing[id].toggle()
                         if conductor.playing[id] {
                             conductor.addSixteenth(number: Double(id % 16), note: conductor.notes[Int(id / 16)], duration: 0.25)
@@ -132,32 +198,78 @@ struct RecordSequencer: View {
     @Environment(\.scenePhase) var scenePhase
     @StateObject var conductor = RecordSequencerClass()
     @State var isPlaying: Bool = false
+    @State var isDragging: Bool = false
+    @State var dragOffset: CGFloat = 0
     var body: some View {
         ZStack{
             
             RadialGradient(gradient: Gradient(colors: [.blue.opacity(0.5), .black]), center: .center, startRadius: 2, endRadius: 650).edgesIgnoringSafeArea(.all)
             VStack {
-                Text(isPlaying ? "Stop" : "Play")
-                    .padding(.top)
-                    .onTapGesture {
-                        isPlaying.toggle()
-                        if isPlaying {
-                            conductor.sequencer.play()
+                
+                HStack {
+//                    Slider(value: $conductor.tempo, in: 30...240, step:1) {
+//                        Text("Tempo")
+//                    }
+//                    .onChange(of: conductor.tempo) {newTempo in
+//                        conductor.setTempo(newTempo)
+//                    }
+//                    .rotationEffect(.degrees(-90))
+//                    .frame(width: 200)
+                
+                    Text("\(Int(conductor.tempo)) BPM")
+                    .frame(width: 150)
+                    .font(.largeTitle)
+                    .padding()
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in
+                                isDragging = true
+                                let delta = value.translation.height
+                                let adjustment = -delta / 100 // Adjust sensitivity
+                                conductor.tempo = max(30, min(240, conductor.tempo + adjustment)) // Clamp tempo between 30 and 240
+                            }
+                            .onEnded { _ in
+                                isDragging = false
+                            }
+                    )
+                    .foregroundColor(isDragging ? .yellow : .primary) // Highlight while dragging
+                    .padding()
+                    .onChange(of: conductor.tempo) {newTempo in
+                        conductor.setTempo(newTempo)
+                    }
+//                    Text("Tempo: \(Int(conductor.tempo)) BPM").padding(.top)
+                    
+                    Button(action: {
+    //                    conductor.isRecording.toggle()
+                        if conductor.isRecording {
+                            conductor.stopRecording()
                         }
                         else {
-                            conductor.sequencer.stop()
-                            conductor.sequencer.rewind()
+                            conductor.startRecording()
                         }
+                    }) {
+                        Text(conductor.isRecording ? "Stop Recording" : "Start Recording")
+                            .foregroundColor(conductor.isRecording ? Color.blue : Color.red)
+                            .padding()
+                            .background(conductor.isRecording ? Color.red : Color.blue)
+                            .cornerRadius(10)
                     }
-                Slider(value: $conductor.tempo, in: 30...240, step:1) {
-                    Text("Tempo")
+                    .padding(.top)
+                    
+                    Text(isPlaying ? "Stop" : "Play")
+                        .padding(.top)
+                        .onTapGesture {
+                            isPlaying.toggle()
+                            if isPlaying {
+                                conductor.sequencer.play()
+                            }
+                            else {
+                                conductor.sequencer.stop()
+                                conductor.sequencer.rewind()
+                            }
+                        }
                 }
-                .onChange(of: conductor.tempo) {newTempo in
-                    conductor.setTempo(newTempo)
-                }
-                .padding()
-                
-                Text("Tempo: \(Int(conductor.tempo)) BPM").padding(.bottom)
+                .padding(.top, 30)
                 
                 ScrollView {
                     VStack {
@@ -198,8 +310,6 @@ struct RecordSequencer: View {
         .onChange(of: scenePhase) { newPhase in
                 if newPhase == .active {
                     if !conductor.engine.avEngine.isRunning {
-                        try? conductor.instrument.loadInstrument(url:
-                                                                    Bundle.main.url(forResource: "Sounds/GuitarTaps", withExtension: "exs")!)
                         try? conductor.engine.start()
                     }
                     
