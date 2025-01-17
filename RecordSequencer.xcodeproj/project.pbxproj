@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		6E4E72E92D3305DE001B6E3D /* AudioKit in Frameworks */ = {isa = PBXBuildFile; productRef = 6E4E72E82D3305DE001B6E3D /* AudioKit */; };
-		6EA033542D332D7100D6AED5 /* GuitarTaps.exs in Resources */ = {isa = PBXBuildFile; fileRef = 6EA033522D332D7100D6AED5 /* GuitarTaps.exs */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -32,7 +31,6 @@
 		6E4E72A32D32FAF3001B6E3D /* RecordSequencer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RecordSequencer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6E4E72B32D32FAF5001B6E3D /* RecordSequencerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RecordSequencerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6E4E72BD2D32FAF5001B6E3D /* RecordSequencerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RecordSequencerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		6EA033522D332D7100D6AED5 /* GuitarTaps.exs */ = {isa = PBXFileReference; lastKnownFileType = file; path = GuitarTaps.exs; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -95,7 +93,6 @@
 		6E4E729A2D32FAF3001B6E3D = {
 			isa = PBXGroup;
 			children = (
-				6EA033532D332D7100D6AED5 /* Sounds */,
 				6E4E72A52D32FAF3001B6E3D /* RecordSequencer */,
 				6E4E72B62D32FAF5001B6E3D /* RecordSequencerTests */,
 				6E4E72C02D32FAF5001B6E3D /* RecordSequencerUITests */,
@@ -119,14 +116,6 @@
 			children = (
 			);
 			name = Frameworks;
-			sourceTree = "<group>";
-		};
-		6EA033532D332D7100D6AED5 /* Sounds */ = {
-			isa = PBXGroup;
-			children = (
-				6EA033522D332D7100D6AED5 /* GuitarTaps.exs */,
-			);
-			path = Sounds;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -253,7 +242,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				6EA033542D332D7100D6AED5 /* GuitarTaps.exs in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

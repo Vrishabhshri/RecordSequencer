@@ -2,40 +2,50 @@ import SwiftUI
 import AudioKit
 import AVFoundation
 
-class RecordSequencerClass: ObservableObject {
+class RecordSequencerClass: NSObject, ObservableObject, AVAudioPlayerDelegate {
     
     let engine = AudioEngine()
-    var instrument = AppleSampler()
+    var sampler = AppleSampler()
     var sequencer = AppleSequencer()
+    var mixer = Mixer()
+    var nodeRecorder: NodeRecorder!
     var midiCallback = MIDICallbackInstrument()
     var recordingSession: AVAudioSession!
     var recorder: AVAudioRecorder!
     var recordedFileURL: URL!
-    var numberOfRecords: Int = 0
+    var audioPlayer: AVAudioPlayer!
+    @Published var numberOfRecords: Int = 0
+    @Published var audioFiles = ["Recording name 1", "Recording name 2"]
     @Published var isRecording = false
+    @Published var isPlayingSample: Bool = false
     @Published var playing : [Bool] = Array(repeating: false, count: 16)
     @Published var rowIsActive: Int = -1
     @Published var tempo: Double = 120
     @Published var numberOfRows: Int = 1
     let notes = [60,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51]
-    init() {
+    // Replace above notes array with a dictionary to store which rows are associated with which audio file urls
+    override init() {
+        
+        super.init()
+        
         midiCallback.callback = { status, note, velocity in
             if status == 144 {
                 // Note on
                 let beat = self.sequencer.currentRelativePosition.beats * 4
                 self.rowIsActive = Int(beat)
-                self.instrument.play(noteNumber: note, velocity: velocity, channel: 0)
+                self.sampler.play(noteNumber: note, velocity: velocity, channel: 0)
             }
             else if status == 128 {
                 // Note off
-                self.instrument.stop(noteNumber: note, channel: 0)
+                self.sampler.stop(noteNumber: note, channel: 0)
                 self.rowIsActive = -1
             }
         }
-        engine.output = instrument
+        engine.output = sampler
         try? engine.start()
         
         setUpSequencer()
+        reloadAudioFiles()
         setUpRecorder()
         
     }
@@ -43,24 +53,41 @@ class RecordSequencerClass: ObservableObject {
         sequencer.newTrack("Track 1")
         let loopLength = 4.0
         
+        sequencer.setTempo(tempo)
         sequencer.setLength(Duration(beats: loopLength))
         sequencer.setLoopInfo(Duration(beats: loopLength), loopCount: 0)
         sequencer.setGlobalMIDIOutput(midiCallback.midiIn)
         sequencer.enableLooping()
         sequencer.preroll()
     }
+    func reloadAudioFiles() {
+        do {
+            let audioFilesInDirectory = try FileManager.default.contentsOfDirectory(atPath: getDirectory().path)
+//            print(getDirectory().path)
+//            print(audioFiles)
+            
+            numberOfRecords = audioFilesInDirectory.count
+            audioFiles = audioFilesInDirectory.filter { $0.hasSuffix(".m4a") }
+            
+        }
+        catch {
+            print("Could not locate files in: \(getDirectory().path)")
+        }
+    }
     func setUpRecorder() {
         recordingSession = AVAudioSession.sharedInstance()
         
-        if let storedNumberOfRecords: Int = UserDefaults.standard.object(forKey: "numberOfRecords") as? Int{
-            numberOfRecords = storedNumberOfRecords
-        }
+//        let audioDevices = AVAudioSession.sharedInstance().availableInputs
+//        print("Available audio devices: \(audioDevices)")
         
-        AVAudioApplication.requestRecordPermission {
-            hasPermission in
-            if hasPermission {
-                print("Accepted")
-            }
+        do {
+            try recordingSession.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
+            try recordingSession.setActive(true)
+            try recordingSession.setPreferredSampleRate(44100) // Match sample rate
+            try recordingSession.setPreferredInputNumberOfChannels(1) // Mono
+            try recordingSession.setPreferredIOBufferDuration(0.005)
+        } catch {
+            print("Failed to configure AVAudioSession: \(error.localizedDescription)")
         }
         
     }
@@ -69,12 +96,32 @@ class RecordSequencerClass: ObservableObject {
         self.tempo = tempo
     }
     func addSixteenth(number: Double, note: Int, duration: Double) {
+        
+        // Need to be able to add sequencer tracks related to audio file and note midi notes
+        
         sequencer.tracks.first?.add(noteNumber: MIDINoteNumber(note), velocity: 127, position: Duration(beats: 0.25 * number),
                                     duration: Duration(beats: duration))
         
 //        print(playing)
 //        print("addSixteenth")
     }
+//    func addSixteenthForAudioFile(filePath: String, position: Double, duration: Double) {
+//        guard let url = URL(string: filePath) else {
+//            print("Invalid file path.")
+//            return
+//        }
+//        do {
+//            let audioFile = try AVAudioFile(forReading: url)
+//            let player = AudioPlayer(file: audioFile)
+//            sequencer.tracks.first?.add {
+//                player.start(at: sequencer.currentTime + Duration(beats: 0.25 * position))
+//                player.stop(at: sequencer.currentTime + Duration(beats: 0.25 * position + duration))
+//            }
+//        }
+//        catch {
+//            
+//        }
+//    }
     func removeSixteenth(number: Double) {
         sequencer.clearRange(start: Duration(beats: 0.25 * number), duration: Duration(beats: 0.25))
 //        print(playing)
@@ -87,7 +134,7 @@ class RecordSequencerClass: ObservableObject {
 //        print("addRow")
     }
     func removeRow() {
-        guard numberOfRows > 1 else { return } // Ensure there's at least one row to remove
+        guard numberOfRows > 1 else { return }
         
         for col in 0..<16 {
             removeSixteenth(number: Double(col))
@@ -110,15 +157,22 @@ class RecordSequencerClass: ObservableObject {
     }
     func startRecording() {
         let fileName = getDirectory().appendingPathComponent("\(numberOfRecords).m4a")
+        print(fileName)
         let settings = [
             AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey: 41000,
+            AVSampleRateKey: 44100, // Sample rate doesn't work for some reason
             AVNumberOfChannelsKey: 1,
             AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
         ]
         do {
             recorder = try AVAudioRecorder(url: fileName, settings: settings)
-            recorder?.record()
+            if recorder.prepareToRecord() {
+                recorder.record()
+                isRecording = true
+                print("Recording started.")
+            } else {
+                print("Failed to prepare for recording.")
+            }
         }
         catch {
             print("Recording did not work sir")
@@ -129,17 +183,74 @@ class RecordSequencerClass: ObservableObject {
         isRecording = false
         recorder = nil
         
-        UserDefaults.standard.set(numberOfRecords, forKey: "numberOfRecords")
+        reloadAudioFiles()
     }
-    func loadRecordedAudio(url: URL) {
+    func playAudioSample(file: String) {
+        
+        let filePath = getDirectory().appendingPathComponent(file)
+        
         do {
-            try instrument.loadAudioFile(AVAudioFile(forReading: url))
+            audioPlayer = try AVAudioPlayer(contentsOf: filePath)
+            audioPlayer.delegate = self
+            audioPlayer?.prepareToPlay()
+            audioPlayer?.play()
+            
+            isPlayingSample = true
         }
         catch {
-            print("Failed to load recorded audio: \(error.localizedDescription)")
+            print("Audio sample was not able to be playeds: \(error.localizedDescription)")
+        }
+        
+    }
+    func stopAudioSample() {
+        audioPlayer?.stop()
+        audioPlayer = nil
+        isPlayingSample = false
+    }
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        DispatchQueue.main.async {
+            self.isPlayingSample = false
         }
     }
+}
+
+struct AudioRecordingsList: View {
+    @EnvironmentObject var conductor: RecordSequencerClass
+    @State var selectedRecording: String? = nil
+    var id: Int
     
+    var body: some View {
+        
+        ScrollView {
+            List(conductor.audioFiles, id: \.self) { recording in
+                VStack {
+                    Text(recording)
+                    
+                    if selectedRecording == recording {
+                        Text("Selected")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                    }
+                }
+                .listRowBackground(Color.clear)
+                .onTapGesture {
+                    if recording == selectedRecording {
+                        selectedRecording = nil
+                    }
+                    else {
+                        selectedRecording = recording
+                    }
+                }
+            }
+            .frame(minHeight: 200)
+            .frame(maxWidth: 250)
+            .background(Color.purple.opacity(0.1))
+            .scrollContentBackground(.hidden)
+            .cornerRadius(10)
+            .listStyle(.plain)
+        }
+        
+    }
 }
 
 struct RecordSequencerPadView: Identifiable, View {
@@ -200,21 +311,71 @@ struct RecordSequencer: View {
     @State var isPlaying: Bool = false
     @State var isDragging: Bool = false
     @State var dragOffset: CGFloat = 0
+    @State var highlightedRow: Int = 0
+    @State var rowToAudioMapping: [Int: String] = [0: ""]
+    
     var body: some View {
         ZStack{
             
-            RadialGradient(gradient: Gradient(colors: [.blue.opacity(0.5), .black]), center: .center, startRadius: 2, endRadius: 650).edgesIgnoringSafeArea(.all)
+            RadialGradient(gradient: Gradient(colors: [.blue.opacity(0.8), .black]), center: .center, startRadius: 2, endRadius: 650).edgesIgnoringSafeArea(.all)
             VStack {
                 
                 HStack {
-//                    Slider(value: $conductor.tempo, in: 30...240, step:1) {
-//                        Text("Tempo")
-//                    }
-//                    .onChange(of: conductor.tempo) {newTempo in
-//                        conductor.setTempo(newTempo)
-//                    }
-//                    .rotationEffect(.degrees(-90))
-//                    .frame(width: 200)
+                    VStack {
+                        Text("Audio Recordings")
+
+                        ScrollView {
+                            List(conductor.audioFiles, id: \.self) { recording in
+                                VStack {
+                                    Text(recording)
+                                    
+                                    if rowToAudioMapping[highlightedRow] == recording {
+                                        Text("Selected")
+                                            .font(.caption)
+                                            .foregroundColor(.green)
+                                    }
+                                }
+                                .listRowBackground(Color.clear)
+                                .onTapGesture {
+                                    if recording == rowToAudioMapping[highlightedRow] {
+                                        rowToAudioMapping[highlightedRow] = ""
+                                    }
+                                    else {
+                                        rowToAudioMapping[highlightedRow] = recording
+                                    }
+                                }
+                            }
+                            .frame(minHeight: 200)
+                            .frame(maxWidth: 250)
+                            .background(Color.purple.opacity(0.1))
+                            .scrollContentBackground(.hidden)
+                            .cornerRadius(10)
+                            .listStyle(.plain)
+                        }
+
+                        Button(action: {
+                            if let selected = rowToAudioMapping[highlightedRow] {
+                                conductor.isPlayingSample.toggle()
+                                
+                                if conductor.isPlayingSample {
+                                    conductor.playAudioSample(file: selected)
+                                }
+                                else {
+                                    conductor.stopAudioSample()
+                                }
+                                
+                            }
+                        }) {
+                            Text(conductor.isPlayingSample ? "Stop" : "Play")
+                                .foregroundColor(.white)
+                                .padding()
+                                .frame(maxWidth: 70)
+                                .background(rowToAudioMapping[highlightedRow] != "" ? Color.green : Color.blue)
+                                .cornerRadius(10)
+                                .disabled(rowToAudioMapping[highlightedRow] == "")
+                            
+                        }
+                    }
                 
                     Text("\(Int(conductor.tempo)) BPM")
                     .frame(width: 150)
@@ -225,22 +386,20 @@ struct RecordSequencer: View {
                             .onChanged { value in
                                 isDragging = true
                                 let delta = value.translation.height
-                                let adjustment = -delta / 100 // Adjust sensitivity
-                                conductor.tempo = max(30, min(240, conductor.tempo + adjustment)) // Clamp tempo between 30 and 240
+                                let adjustment = -delta / 100
+                                conductor.tempo = max(30, min(240, conductor.tempo + adjustment))
                             }
                             .onEnded { _ in
                                 isDragging = false
                             }
                     )
-                    .foregroundColor(isDragging ? .yellow : .primary) // Highlight while dragging
+                    .foregroundColor(isDragging ? .yellow : .primary)
                     .padding()
                     .onChange(of: conductor.tempo) {newTempo in
                         conductor.setTempo(newTempo)
                     }
-//                    Text("Tempo: \(Int(conductor.tempo)) BPM").padding(.top)
                     
                     Button(action: {
-    //                    conductor.isRecording.toggle()
                         if conductor.isRecording {
                             conductor.stopRecording()
                         }
@@ -275,6 +434,19 @@ struct RecordSequencer: View {
                     VStack {
                         ForEach(0..<conductor.numberOfRows, id: \.self) { row in
                             HStack{
+                                Button(action: {
+                                    highlightedRow = row
+                                }) {
+                                    Circle()
+                                        .fill(highlightedRow == row ? Color.blue.opacity(0.5) : Color.gray.opacity(0.5))
+                                        .frame(width: 15, height: 15)
+                                        .overlay(
+                                            Circle().stroke(Color.blue, lineWidth: 2)
+                                        )
+                                        .shadow(color: highlightedRow == row ? Color.blue : Color.clear, radius: 5)
+                                }
+                                .padding(.leading, 5)
+                                
                                 ForEach(0..<16, id: \.self) { col in
                                     RecordSequencerPadView(id: col + (row * 16))
                                 }
@@ -282,6 +454,7 @@ struct RecordSequencer: View {
                         }
                         HStack {
                             Button(action: {
+                                rowToAudioMapping[conductor.numberOfRows] = ""
                                 conductor.addRow()
                             }) {
                                 Text("Add Row")
@@ -293,6 +466,7 @@ struct RecordSequencer: View {
                             .padding()
                             Button(action: {
                                 conductor.removeRow()
+                                rowToAudioMapping.removeValue(forKey: conductor.numberOfRows)
                             }) {
                                 Text("Remove Row")
                                     .foregroundColor(.green)
