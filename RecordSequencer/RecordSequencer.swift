@@ -17,23 +17,55 @@ class RecordSequencerClass: NSObject, ObservableObject, AVAudioPlayerDelegate {
     @Published var isRecording = false
     @Published var isPlayingSample: Bool = false
     @Published var playing : [Bool] = Array(repeating: false, count: 16)
+    @Published var playingNew: [[Bool]]
     @Published var rowIsActive: Int = -1
     @Published var tempo: Double = 120
     @Published var numberOfRows: Int = 1
     @Published var rowToAudioMapping: [Int: String] = [0: ""]
     let notes = [60,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51]
     
+    // Testing stuff
+    
+    var avEngine = AVAudioEngine()
+    var mixer: AVAudioMixerNode!
+    var playerNodes: [AVAudioPlayerNode]
+    var audioFilesURLs: [URL]
+    var audioFilesList: [AVAudioFile]
+    var timer: Timer?
+    let beatsPerMeasure: Int
+    let beatDuration: Double
+    
     override init() {
+        
+        self.avEngine = AVAudioEngine()
+        self.mixer = AVAudioMixerNode()
+        self.playerNodes = []
+        self.audioFilesURLs = []
+        self.audioFilesList = []
+        self.beatsPerMeasure = 16
+        self.beatDuration = 0.125
+        self.playingNew = []
         
         super.init()
         
         engine.output = sampler
         try? engine.start()
         
+        setUpEngine()
         setUpSequencer()
         reloadAudioFiles()
         setUpRecorder()
         
+    }
+    func setUpEngine() {
+        avEngine.attach(mixer)
+        avEngine.connect(mixer, to: avEngine.mainMixerNode, format: nil)
+        do {
+            try avEngine.start()
+        }
+        catch {
+            print("AVAudioEngine unable to start: \(error.localizedDescription)")
+        }
     }
     func setUpSequencer() {
         sequencer.newTrack("Track 1")
@@ -54,6 +86,10 @@ class RecordSequencerClass: NSObject, ObservableObject, AVAudioPlayerDelegate {
             
             numberOfRecords = audioFilesInDirectory.count
             audioFiles = audioFilesInDirectory.filter { $0.hasSuffix(".m4a") }
+            audioFilesInDirectory.forEach {
+                audioFileName in
+                audioFilesURLs.append(getDirectory().appendingPathComponent(audioFileName))
+            }
             
         }
         catch {
@@ -74,6 +110,60 @@ class RecordSequencerClass: NSObject, ObservableObject, AVAudioPlayerDelegate {
             try recordingSession.setPreferredIOBufferDuration(0.005)
         } catch {
             print("Failed to configure AVAudioSession: \(error.localizedDescription)")
+        }
+        
+    }
+    func loadAudioFiles(fileURLs: [URL]) {
+        for fileURL in fileURLs {
+            do {
+                print(fileURL)
+                let audioFile = try AVAudioFile(forReading: fileURL)
+                let playerNode = AVAudioPlayerNode()
+                playerNodes.append(playerNode)
+                audioFilesList.append(audioFile)
+                avEngine.attach(playerNode)
+                avEngine.connect(playerNode, to: mixer, format: audioFile.processingFormat)
+            }
+            catch {
+                print("Error converting audioFileURL to AVAudioFile: \(error.localizedDescription)")
+            }
+        }
+    }
+    func startSequencer() {
+        stopSequencer()
+        
+        var currentBeat = 0
+        timer = Timer.scheduledTimer(withTimeInterval: beatDuration, repeats: true) {
+            
+            [weak self] _ in
+            guard let self = self else { return }
+            self.playBeat(currentBeat)
+            currentBeat = (currentBeat + 1) % self.beatsPerMeasure
+            
+        }
+        
+    }
+    func stopSequencer() {
+        timer?.invalidate()
+        timer = nil
+        playerNodes.forEach { $0.stop() }
+    }
+    func playBeat(_ beat: Int) {
+        
+        for (row, isActive) in playingNew.enumerated() {
+            
+            if isActive[beat], row < playerNodes.count {
+                
+                let playerNode = playerNodes[row]
+                let audioFile = audioFilesList[row]
+                playerNode.stop()
+                playerNode.scheduleFile(audioFile, at: nil) {
+                    print ("Played row \(row) at beat \(beat)")
+                }
+                playerNode.play()
+                
+            }
+            
         }
         
     }
@@ -252,6 +342,27 @@ struct RecordSequencer: View {
             
             RadialGradient(gradient: Gradient(colors: [.blue.opacity(0.8), .black]), center: .center, startRadius: 2, endRadius: 650).edgesIgnoringSafeArea(.all)
             VStack {
+                
+                Button(action: {
+                    let fileURLs = conductor.audioFilesURLs
+                    conductor.loadAudioFiles(fileURLs: fileURLs)
+                    
+                    print(conductor.audioFilesList)
+                    
+                    conductor.audioFilesList.forEach {
+                        (file) in
+                        conductor.playingNew.append(Array(repeating: false, count: 16))
+                    }
+                    
+                    
+                    conductor.playingNew[0][0] = true
+                    conductor.playingNew[0][8] = true
+                    
+                    conductor.startSequencer()
+                    
+                }) {
+                    Text("Try it out")
+                }
                 
                 HStack {
                     VStack {
