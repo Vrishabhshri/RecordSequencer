@@ -2,49 +2,62 @@ import SwiftUI
 import AudioKit
 import AVFoundation
 
+struct AudioData {
+    var name: String?
+    var audioFile: AVAudioFile?
+    var playerNode: AVAudioPlayerNode?
+}
+
 class RecordSequencerClass: NSObject, ObservableObject, AVAudioPlayerDelegate {
     
+    // Engine
     let engine = AudioEngine()
+    let avEngine = AVAudioEngine()
+    
+    // Instruments
     var sampler = AppleSampler()
     var sequencer = AppleSequencer()
     var midiCallback = MIDICallbackInstrument()
+    var mixer = AVAudioMixerNode()
+    
+    // Recording
     var recordingSession: AVAudioSession!
     var recorder: AVAudioRecorder!
     var recordedFileURL: URL!
-    var audioPlayer: AVAudioPlayer!
     @Published var numberOfRecords: Int = 0
-    @Published var audioFiles = ["Recording name 1", "Recording name 2"]
     @Published var isRecording = false
+    
+    // Audio playing
+    var audioPlayer: AVAudioPlayer!
     @Published var isPlayingSample: Bool = false
-    @Published var playing : [Bool] = Array(repeating: false, count: 16)
-    @Published var playingNew: [[Bool]]
-    @Published var rowIsActive: Int = -1
+    var timer: Timer?
+    let beatsPerMeasure: Int = 16
+    let beatDuration: Double = 0.125
+    @Published var playingNew: [[Bool]] = []
     @Published var tempo: Double = 120
+    
+    // Audio files
+    @Published var audioFiles = ["Recording name 1", "Recording name 2"]
+    var rowToAudioMapping: [Int: AudioData?] = [0: nil]
+    
+    // PadView info required for backend
     @Published var numberOfRows: Int = 1
-    @Published var rowToAudioMapping: [Int: String] = [0: ""]
+    @Published var rowIsActive: Int = -1
+
+    @Published var playing : [Bool] = Array(repeating: false, count: 16)
+    
+    
+    @Published var isPlaying: Bool = false
     let notes = [60,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51]
     
     // Testing stuff
     
-    var avEngine = AVAudioEngine()
-    var mixer: AVAudioMixerNode!
-    var playerNodes: [AVAudioPlayerNode]
-    var audioFilesURLs: [URL]
-    var audioFilesList: [AVAudioFile]
-    var timer: Timer?
-    let beatsPerMeasure: Int
-    let beatDuration: Double
+    var playerNodes: [AVAudioPlayerNode] = []
+    var audioFilesURLs: [URL] = []
+    var audioFilesList: [AVAudioFile] = []
     
     override init() {
         
-        self.avEngine = AVAudioEngine()
-        self.mixer = AVAudioMixerNode()
-        self.playerNodes = []
-        self.audioFilesURLs = []
-        self.audioFilesList = []
-        self.beatsPerMeasure = 16
-        self.beatDuration = 0.125
-        self.playingNew = []
         
         super.init()
         
@@ -80,16 +93,13 @@ class RecordSequencerClass: NSObject, ObservableObject, AVAudioPlayerDelegate {
     }
     func reloadAudioFiles() {
         do {
+            // Grab files
             let audioFilesInDirectory = try FileManager.default.contentsOfDirectory(atPath: getDirectory().path)
-//            print(getDirectory().path)
-//            print(audioFiles)
             
+            // Load them into audio file recordings list
             numberOfRecords = audioFilesInDirectory.count
             audioFiles = audioFilesInDirectory.filter { $0.hasSuffix(".m4a") }
-            audioFilesInDirectory.forEach {
-                audioFileName in
-                audioFilesURLs.append(getDirectory().appendingPathComponent(audioFileName))
-            }
+            
             
         }
         catch {
@@ -148,6 +158,7 @@ class RecordSequencerClass: NSObject, ObservableObject, AVAudioPlayerDelegate {
         timer = nil
         playerNodes.forEach { $0.stop() }
     }
+    // Schedules audio file to play on beat
     func playBeat(_ beat: Int) {
         
         for (row, isActive) in playingNew.enumerated() {
@@ -175,39 +186,46 @@ class RecordSequencerClass: NSObject, ObservableObject, AVAudioPlayerDelegate {
         
         // Need to be able to add sequencer tracks related to audio file and note midi notes
         
-        sequencer.tracks.first?.add(noteNumber: MIDINoteNumber(60), velocity: 0, position: Duration(beats: 0.25 * number),
-                                    duration: Duration(beats: duration))
+//        sequencer.tracks.first?.add(noteNumber: MIDINoteNumber(60), velocity: 0, position: Duration(beats: 0.25 * number),
+//                                    duration: Duration(beats: duration))
         
 //        print(playing)
 //        print("addSixteenth")
     }
     func removeSixteenth(number: Double) {
-        sequencer.clearRange(start: Duration(beats: 0.25 * number), duration: Duration(beats: 0.25))
+//        sequencer.clearRange(start: Duration(beats: 0.25 * number), duration: Duration(beats: 0.25))
+        
+        
+        
 //        print(playing)
 //        print("removeSixteenth")
     }
     func addRow() {
-        numberOfRows += 1
-        playing += Array(repeating: false, count: 16)
+//        numberOfRows += 1
+//        playing += Array(repeating: false, count: 16)
+        
+        
+        
+        
 //        print(playing.count)
 //        print("addRow")
     }
     func removeRow() {
-        guard numberOfRows > 1 else { return }
-        
-        for col in 0..<16 {
-            removeSixteenth(number: Double(col))
-        }
-        
-        numberOfRows -= 1
-        
-        for row in 0..<numberOfRows {
-            for col in 0..<16 {
-                if playing[col + row * 16] {
-                    addSixteenth(number: Double(col % 16), note: notes[Int(col/16) + row], duration: 0.25)
-                }
-            }
-        }
+//        guard numberOfRows > 1 else { return }
+//        
+//        for col in 0..<16 {
+//            removeSixteenth(number: Double(col))
+//        }
+//        
+//        numberOfRows -= 1
+//        
+//        for row in 0..<numberOfRows {
+//            for col in 0..<16 {
+//                if playing[col + row * 16] {
+//                    addSixteenth(number: Double(col % 16), note: notes[Int(col/16) + row], duration: 0.25)
+//                }
+//            }
+//        }
     }
     func getDirectory() -> URL {
         let documentURLS = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
@@ -244,32 +262,105 @@ class RecordSequencerClass: NSObject, ObservableObject, AVAudioPlayerDelegate {
         
         reloadAudioFiles()
     }
-    func playAudioSample(file: String) {
+//    func playAudioSample(file: String) {
+//        
+//        let filePath = getDirectory().appendingPathComponent(file)
+//        
+//        do {
+//            audioPlayer = try AVAudioPlayer(contentsOf: filePath)
+//            audioPlayer.delegate = self
+//            audioPlayer?.prepareToPlay()
+//            audioPlayer?.play()
+//            
+//            isPlayingSample = true
+//        }
+//        catch {
+//            print("Audio sample was not able to be playeds: \(error.localizedDescription)")
+//        }
+//        
+//    }
+    func playAudioSample(row: Int) {
         
-        let filePath = getDirectory().appendingPathComponent(file)
+        let audioData: AudioData! = rowToAudioMapping[row]!
+        let name = audioData.name!
+        let audioFile = audioData.audioFile!
+        let playerNode = audioData.playerNode!
         
-        do {
-            audioPlayer = try AVAudioPlayer(contentsOf: filePath)
-            audioPlayer.delegate = self
-            audioPlayer?.prepareToPlay()
-            audioPlayer?.play()
-            
-            isPlayingSample = true
-        }
-        catch {
-            print("Audio sample was not able to be playeds: \(error.localizedDescription)")
-        }
+        let buffer = AVAudioPCMBuffer(pcmFormat: audioFile.processingFormat, frameCapacity: AVAudioFrameCount(audioFile.length))
+        
+        avEngine.attach(playerNode)
+        avEngine.connect(playerNode, to: mixer, format: audioFile.processingFormat)
+        
+        playerNode.scheduleBuffer(buffer, completionHandler: {
+            print("Complete")
+            isPlayingSample = false
+//            playerNode.stop()
+            avEngine.detach(playerNode)
+        })
+        
+        playerNode.play()
         
     }
-    func stopAudioSample() {
-        audioPlayer?.stop()
-        audioPlayer = nil
-        isPlayingSample = false
+//    func stopAudioSample() {
+//        audioPlayer?.stop()
+//        audioPlayer = nil
+//        isPlayingSample = false
+//    }
+    func stopAudioSample(row: Int) {
+        
+        let audioData: AudioData! = rowToAudioMapping[row]
+        let name = audioData.name!
+        let audioFile = audioData.audioFile!
+        let playerNode = audioData.playerNode!
+        
+        playerNode.stop()
+        avEngine.detach(playerNode)
+        
     }
     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         DispatchQueue.main.async {
             self.isPlayingSample = false
         }
+    }
+    func mapRowToAudio(row: Int, audioFileName: String) {
+        
+        // Create skeleton of audio file necessities
+        var audioData = AudioData()
+        
+        audioData.name = audioFileName
+        
+        do {
+            
+            // Create AVAudioFile and add to struct
+            let audioFileURL = getDirectory().appendingPathComponent(audioFileName)
+            let audioFile = try AVAudioFile(forReading: audioFileURL)
+            audioData.audioFile = audioFile
+            
+            // Create player node and add to struct
+            let playerNode = AVAudioPlayerNode()
+            audioData.playerNode = playerNode
+            
+            // Attach player node to created audio file
+//            avEngine.attach(playerNode)
+//            avEngine.connect(playerNode, to: mixer, format: audioFile.processingFormat)
+            
+        }
+        catch {
+            print("Couldn't create audio file with given name: \(error.localizedDescription)")
+        }
+        
+    }
+    func unmapRowFromAudio(row: Int) {
+        
+        // Find audio data
+        var audioData = rowToAudioMapping[row]!
+        
+        // Detach the player node of audio file of row from engine
+        avEngine.detach(audioData.playerNode as! AVAudioPlayerNode)
+        
+        // Notate that row now has no audio file mapping
+        rowToAudioMapping[row] = nil
+        
     }
 }
 
@@ -277,11 +368,13 @@ struct RecordSequencerPadView: Identifiable, View {
     @EnvironmentObject var conductor: RecordSequencerClass
     @GestureState var isPressed = false
 //    @GestureState var dragOffset: CGFloat = 0
+    var rowID: Int
+    var colID: Int
     var id: Int
     @State var isActive = false
     var body: some View {
         RoundedRectangle(cornerRadius: 2.0)
-            .fill(conductor.playing[id] ? Color.blue: Color.black)
+            .fill(conductor.playingNew[rowID][colID] ? Color.blue: Color.black)
             .overlay(
                 RoundedRectangle(cornerRadius: 2.0)
                     .stroke(isActive ? Color.blue : Color.blue, lineWidth: 5)
@@ -301,38 +394,51 @@ struct RecordSequencerPadView: Identifiable, View {
                         gestureState = true
 //                    }
                 })
-            .onChange(of: isPressed, perform: {
-                    pressed in
-                if pressed {
-                        conductor.playing[id].toggle()
-                        if conductor.playing[id] {
-                            conductor.addSixteenth(number: Double(id % 16), note: conductor.notes[Int(id / 16)], duration: 0.25)
-                        }
-                        else {
-                            conductor.removeSixteenth(number: Double(id % 16))
-                            for row in -conductor.numberOfRows...conductor.numberOfRows {
-                                if id + (row * 16) >= 0 && id + (row * 16) < conductor.playing.count &&
-                                    conductor.playing[id + (row * 16)] {
-                                    conductor.addSixteenth(number: Double(id % 16), note: conductor.notes[Int(id/16) + row], duration: 0.25)
-                                    
-                                }
-                            }
-                        }
+            .onChange(of: isPressed, perform: { pressed in
+                if !conductor.isPlaying {
+                    
+                    if pressed {
+                        //                        conductor.playing[id].toggle()
+                        //                        if conductor.playing[id] {
+                        //                            conductor.addSixteenth(number: Double(id % 16), note: conductor.notes[Int(id / 16)], duration: 0.25)
+                        //                        }
+                        //                        else {
+                        //                            conductor.removeSixteenth(number: Double(id % 16))
+                        //                            for row in -conductor.numberOfRows...conductor.numberOfRows {
+                        //                                if id + (row * 16) >= 0 && id + (row * 16) < conductor.playing.count &&
+                        //                                    conductor.playing[id + (row * 16)] {
+                        //                                    conductor.addSixteenth(number: Double(id % 16), note: conductor.notes[Int(id/16) + row], duration: 0.25)
+                        //
+                        //                                }
+                        //                            }
+                        //                        }
+                        
+                        conductor.playingNew[rowID][colID].toggle()
+                        
+                        //                        if conductor.playingNew[rowID][colID] {
+                        //
+                        //
+                        //
+                        //                        }
+                        //                        else {
+                        //
+                        //                        }
                     }
                     else {
                         
                     }
-                })
-                .onChange(of: conductor.rowIsActive) { newValue in
-                    isActive = (newValue == id % 16 && conductor.playing[id])
+                    
                 }
+            })
+            .onChange(of: conductor.rowIsActive) { newValue in
+                isActive = (newValue == rowID && conductor.playingNew[rowID][colID])
+            }
     }
 }
 
 struct RecordSequencer: View {
     @Environment(\.scenePhase) var scenePhase
     @StateObject var conductor = RecordSequencerClass()
-    @State var isPlaying: Bool = false
     @State var isDragging: Bool = false
     @State var dragOffset: CGFloat = 0
     @State var highlightedRow: Int = 0
@@ -343,49 +449,72 @@ struct RecordSequencer: View {
             RadialGradient(gradient: Gradient(colors: [.blue.opacity(0.8), .black]), center: .center, startRadius: 2, endRadius: 650).edgesIgnoringSafeArea(.all)
             VStack {
                 
-                Button(action: {
-                    let fileURLs = conductor.audioFilesURLs
-                    conductor.loadAudioFiles(fileURLs: fileURLs)
-                    
-                    print(conductor.audioFilesList)
-                    
-                    conductor.audioFilesList.forEach {
-                        (file) in
-                        conductor.playingNew.append(Array(repeating: false, count: 16))
-                    }
-                    
-                    
-                    conductor.playingNew[0][0] = true
-                    conductor.playingNew[0][8] = true
-                    
-                    conductor.startSequencer()
-                    
-                }) {
-                    Text("Try it out")
-                }
+//                Button(action: {
+//                    let fileURLs = conductor.audioFilesURLs
+//                    conductor.loadAudioFiles(fileURLs: fileURLs)
+//                    
+//                    conductor.audioFilesList.forEach {
+//                        (file) in
+//                        conductor.playingNew.append(Array(repeating: false, count: 16))
+//                    }
+//                    
+//                    
+//                    conductor.playingNew[0][0] = true
+//                    conductor.playingNew[0][8] = true
+//                    
+//                    conductor.startSequencer()
+//                    
+//                }) {
+//                    Text("Try it out")
+//                }
                 
                 HStack {
                     VStack {
                         Text("Audio Recordings")
 
+                        // List showing audio recordings in top left corner
                         ScrollView {
                             List(conductor.audioFiles, id: \.self) { recording in
                                 VStack {
                                     Text(recording)
                                     
-                                    if conductor.rowToAudioMapping[highlightedRow] == recording {
+                                    let audioData = conductor.rowToAudioMapping[highlightedRow]
+                                    
+                                    // Showing which audio file has been selected for the current row
+                                    if audioData.name == recording {
                                         Text("Selected")
                                             .font(.caption)
                                             .foregroundColor(.green)
                                     }
                                 }
                                 .listRowBackground(Color.clear)
+                                // Handles a user selecting a recording from the audio recordings list
                                 .onTapGesture {
-                                    if recording == conductor.rowToAudioMapping[highlightedRow] {
-                                        conductor.rowToAudioMapping[highlightedRow] = ""
+                                    
+                                    // Get audio data for current row
+                                    let audioData = conductor.rowToAudioMapping[highlightedRow]
+                                    
+                                    // If row has nothing assigned to it:
+                                    if audioData == nil {
+                                        
+                                        // Assign current row to current audio recording
+                                        conductor.mapRowToAudio(row: highlightedRow, audioFileName: recording)
+                                        
                                     }
+                                    // If row already has an audio attached to it:
                                     else {
-                                        conductor.rowToAudioMapping[highlightedRow] = recording
+                                        
+                                        // Unmap the current row's audio
+                                        conductor.unmapRowFromAudio(row: highlightedRow)
+                                        
+                                        // If a new recording was being selected from the list:
+                                        if recording != audioData.name as! String {
+                                            
+                                            // Map it to the current row
+                                            conductor.mapRowToAudio(row: highlightedRow, audioFileName: recording)
+                                            
+                                        }
+                                        
                                     }
                                 }
                             }
@@ -397,26 +526,46 @@ struct RecordSequencer: View {
                             .listStyle(.plain)
                         }
 
+                        // Playing current selected recording from audio recording list
                         Button(action: {
-                            if let selected = conductor.rowToAudioMapping[highlightedRow] {
-                                conductor.isPlayingSample.toggle()
+                            
+//                            let audioData = conductor.rowToAudioMapping[highlightedRow]
+                        
+//                            if audioData != nil {
+//                                conductor.isPlayingSample.toggle()
+//                                
+//                                // Stopping and playing audio file
+//                                if conductor.isPlayingSample {
+//                                    conductor.playAudioSample(file: selected)
+//                                }
+//                                else {
+//                                    conductor.stopAudioSample()
+//                                }
+//                                
+//                            }
+                            
+                            conductor.isPlayingSample.toggle()
+                            
+                            if conductor.isPlayingSample {
                                 
-                                if conductor.isPlayingSample {
-                                    conductor.playAudioSample(file: selected)
-                                }
-                                else {
-                                    conductor.stopAudioSample()
-                                }
+                                conductor.playAudioSample(row: highlightedRow)
                                 
                             }
+                            else {
+                                
+                                conductor.stopAudioSample(row: highlightedRow)
+                                
+                            }
+                            
                         }) {
                             Text(conductor.isPlayingSample ? "Stop" : "Play")
                                 .foregroundColor(.white)
                                 .padding()
                                 .frame(maxWidth: 70)
-                                .background(conductor.rowToAudioMapping[highlightedRow] != "" ? Color.green : Color.blue)
+                                .background(conductor.rowToAudioMapping[highlightedRow] != nil ? Color.green : Color.blue)
                                 .cornerRadius(10)
-                                .disabled(conductor.rowToAudioMapping[highlightedRow] == "")
+                                // Ensuring nothing runs if an audio isn't selected
+                                .disabled(conductor.rowToAudioMapping[highlightedRow] == nil)
                             
                         }
                     }
@@ -428,10 +577,14 @@ struct RecordSequencer: View {
                     .gesture(
                         DragGesture()
                             .onChanged { value in
-                                isDragging = true
-                                let delta = value.translation.height
-                                let adjustment = -delta / 100
-                                conductor.tempo = max(30, min(240, conductor.tempo + adjustment))
+                                if !conductor.isPlaying {
+                                    
+                                    isDragging = true
+                                    let delta = value.translation.height
+                                    let adjustment = -delta / 100
+                                    conductor.tempo = max(30, min(240, conductor.tempo + adjustment))
+                                    
+                                }
                             }
                             .onEnded { _ in
                                 isDragging = false
@@ -459,11 +612,11 @@ struct RecordSequencer: View {
                     }
                     .padding(.top)
                     
-                    Text(isPlaying ? "Stop" : "Play")
+                    Text(conductor.isPlaying ? "Stop" : "Play")
                         .padding(.top)
                         .onTapGesture {
-                            isPlaying.toggle()
-                            if isPlaying {
+                            conductor.isPlaying.toggle()
+                            if conductor.isPlaying {
                                 conductor.sequencer.play()
                             }
                             else {
@@ -492,7 +645,7 @@ struct RecordSequencer: View {
                                 .padding(.leading, 5)
                                 
                                 ForEach(0..<16, id: \.self) { col in
-                                    RecordSequencerPadView(id: col + (row * 16))
+                                    RecordSequencerPadView(rowID: row, colID: col)
                                 }
                             }
                             .padding(.top, 5)
